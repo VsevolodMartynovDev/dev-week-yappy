@@ -191,3 +191,6 @@ class SemanticSearch:
         self.db_data = self._load_vectors_from_db()
         self.desc_index, self.desc_ids = self._build_description_index()
         self.trans_index, self.trans_ids = self._build_transcription_index()
+
+
+semantic_search = SemanticSearch()

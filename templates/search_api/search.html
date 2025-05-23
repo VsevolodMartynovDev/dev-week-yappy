@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Video Search</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .search-container {
+            text-align: center;
+            margin: 50px 0;
+        }
+        .search-form {
+            display: flex;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .search-input {
+            flex: 1;
+            padding: 12px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px 0 0 4px;
+        }
+        .search-button {
+            padding: 12px 24px;
+            background-color: #4285f4;
+            color: white;
+            font-size: 16px;
+            border: none;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+        }
+        .search-button:hover {
+            background-color: #357ae8;
+        }
+        .results-container {
+            margin-top: 30px;
+        }
+        .result-item {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+        .result-score {
+            color: #666;
+            font-size: 14px;
+        }
+        .result-description {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="search-container">
+        <h1>Video Search</h1>
+        <form method="GET" action="{% url 'search' %}" class="search-form">
+            <input type="text" name="q" class="search-input" placeholder="Search for videos..." value="{{ query|default:'' }}">
+            <button type="submit" class="search-button">Search</button>
+        </form>
+    </div>
+
+    {% if results %}
+    <div class="results-container">
+        <h2>Search Results</h2>
+        {% for result in results %}
+        <div class="result-item">
+            <h3><a href="{{ result.url }}" target="_blank">{{ result.filename }}</a></h3>
+            <div class="result-score">Score: {{ result.score|floatformat:4 }}</div>
+            {% if result.description %}
+            <div class="result-description">
+                <strong>Description:</strong> {{ result.description }}
+            </div>
+            {% endif %}
+            {% if result.transcription %}
+            <div class="result-transcription">
+                <strong>Transcription:</strong> {{ result.transcription|truncatewords:50 }}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% elif query %}
+    <div class="results-container">
+        <p>No results found for "{{ query }}".</p>
+    </div>
+    {% endif %}
+</body>
+</html> 

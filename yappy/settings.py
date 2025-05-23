@@ -6,7 +6,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 
-SECRET_KEY = 'django-insecure-nh(dosnhki9uco1uimsge5e+834(1t^7&fl*f2i!5tmz(q51xx'
+SECRET_KEY = os.environ.get("SECRET_KEY", 'django-insecure-nh(dosnhki9uco1uimsge5e+834(1t^7&fl*f2i!5tmz(q51xx')
 
 DEBUG = True
 
@@ -40,7 +40,7 @@ ROOT_URLCONF = 'yappy.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
