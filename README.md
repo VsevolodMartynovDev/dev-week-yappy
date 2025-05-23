@@ -27,7 +27,7 @@ A Django REST Framework backend for semantic search with tensor processing.
 
 **Method**: `GET`
 
-**Body**:
+**URL PARAM**:
 ```json
 {
     "text": "Your search query or #hashtags"

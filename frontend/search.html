@@ -102,7 +102,7 @@
             ],
          };
          // Режим работы (true - тестовые данные, false - реальный API)
-         const USE_MOCK_DATA = true;
+         const USE_MOCK_DATA = false;
 
          function showEmptyState(message = "Начните вводить запрос") {
             const resultsContainer = document.getElementById("searchResults");
@@ -145,7 +145,7 @@
          async function searchWithAPI(query) {
             try {
                const response = await fetch(
-                  `http://localhost:5005/api/search?query=${encodeURIComponent(
+                  `http://localhost:8000/api/search?text=${encodeURIComponent(
                      query
                   )}`
                );
