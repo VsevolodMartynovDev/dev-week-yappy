@@ -43,17 +43,44 @@
             margin-top: 30px;
         }
         .result-item {
-            margin-bottom: 20px;
-            padding: 15px;
+            margin-bottom: 40px;
+            padding: 20px;
             border: 1px solid #eee;
-            border-radius: 4px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         }
         .result-score {
             color: #666;
             font-size: 14px;
+            margin-bottom: 15px;
         }
-        .result-description {
-            margin-top: 10px;
+        .video-container {
+            margin: 15px 0;
+            width: 100%;
+        }
+        .video-player {
+            width: 100%;
+            max-width: 640px;
+            height: auto;
+            max-height: 360px;
+            background-color: #000;
+        }
+        .result-description, .result-transcription {
+            margin-top: 15px;
+            line-height: 1.5;
+        }
+        .result-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .external-link {
+            color: #4285f4;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .external-link:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
@@ -71,8 +98,19 @@
         <h2>Search Results</h2>
         {% for result in results %}
         <div class="result-item">
-            <h3><a href="{{ result.url }}" target="_blank">{{ result.filename }}</a></h3>
+            <div class="result-meta">
+                <h3>{{ result.filename }}</h3>
+                <a href="{{ result.url }}" target="_blank" class="external-link">Open in new tab</a>
+            </div>
             <div class="result-score">Score: {{ result.score|floatformat:4 }}</div>
+            
+            <div class="video-container">
+                <video class="video-player" controls preload="metadata">
+                    <source src="{{ result.url }}" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+            
             {% if result.description %}
             <div class="result-description">
                 <strong>Description:</strong> {{ result.description }}
