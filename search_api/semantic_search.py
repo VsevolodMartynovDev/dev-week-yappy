@@ -1,115 +1,144 @@
-from collections import defaultdict
-
+from django.db import connection
 from sentence_transformers import SentenceTransformer
 import faiss
 import numpy as np
-import json
 
 
 class SemanticSearch:
     def __init__(
             self,
             model_name='paraphrase-multilingual-MiniLM-L12-v2',
-            embeddings_path='/Users/vsevolodmartynov/repos/yappy/temp/embeddings_total.npy',
-            metadata_path='/Users/vsevolodmartynov/repos/yappy/temp/metadata_total.json',
-            source_json_path='/Users/vsevolodmartynov/repos/yappy/temp/merged_ordered_total.json',
             source_url_base='https://s3.ritm.media/hackaton-itmo/',
     ):
         self.model = SentenceTransformer(model_name)
-        self.index = None
-        self.ids = []
-        self.texts = []
-        self.embeddings_path = embeddings_path
-        self.metadata_path = metadata_path
-        self.source_json_path = source_json_path
-        self.vectors = np.load(self.embeddings_path)
-        self.vecs_norm = self.vectors / np.linalg.norm(self.vectors, axis=1, keepdims=True)
-        with open(self.metadata_path, 'r', encoding='utf-8') as f:
-            self.meta = json.load(f)
-        with open(self.source_json_path, 'r', encoding='utf-8') as f:
-            self.source_data = json.load(f)
-        self.source_by_filename = {item['filename']: item for item in self.source_data}
         self.source_url_base = source_url_base
 
-    @staticmethod
-    def build_faiss_index(vectors):
+        self.db_data = self._load_vectors_from_db()
+
+        self.desc_index, self.desc_ids = self._build_description_index()
+        self.trans_index, self.trans_ids = self._build_transcription_index()
+
+    def _load_vectors_from_db(self):
+        with connection.cursor() as cur:
+            cur.execute("""
+                SELECT id, filename, 
+                       description_vector, transcription_vector
+                FROM items
+                WHERE description_vector IS NOT NULL OR transcription_vector IS NOT NULL
+            """)
+
+            results = []
+            for row in cur.fetchall():
+                desc_vector = self._parse_vector(row[2]) if row[2] else None
+                trans_vector = self._parse_vector(row[3]) if row[3] else None
+
+                results.append({
+                    'id': row[0],
+                    'filename': row[1],
+                    'description_vector': desc_vector,
+                    'transcription_vector': trans_vector
+                })
+
+            return results
+
+    def _build_description_index(self):
+        desc_items = [item for item in self.db_data if item['description_vector'] is not None]
+
+        if not desc_items:
+            return None, []
+
+        vectors = np.array([item['description_vector'] for item in desc_items])
+        vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+
         dim = vectors.shape[1]
         index = faiss.IndexFlatIP(dim)
         index.add(vectors)
-        return index
+
+        ids = [item['id'] for item in desc_items]
+
+        return index, ids
+
+    @staticmethod
+    def _parse_vector(vector_string):
+        if vector_string is None:
+            return None
+
+        if isinstance(vector_string, (list, np.ndarray)):
+            return np.array(vector_string)
+
+        if isinstance(vector_string, str):
+            vector_string = vector_string.replace("np.str_('", "").replace("')", "")
+            clean_string = vector_string.strip('[]{}()').replace(' ', '')
+            try:
+                vector_values = [float(x) for x in clean_string.split(',')]
+                return np.array(vector_values)
+            except ValueError:
+                print(f"Error parsing vector: {vector_string[:100]}...")
+                return None
+
+        return None
+
+    def _build_transcription_index(self):
+        trans_items = [item for item in self.db_data if item['transcription_vector'] is not None]
+
+        if not trans_items:
+            return None, []
+
+        vectors = np.array([item['transcription_vector'] for item in trans_items])
+        vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+
+        dim = vectors.shape[1]
+        index = faiss.IndexFlatIP(dim)
+        index.add(vectors)
+
+        ids = [item['id'] for item in trans_items]
+
+        return index, ids
+
+    def _get_item_by_id(self, item_id):
+        for item in self.db_data:
+            if item['id'] == item_id:
+                return item
+        return None
 
     def search_description(self, query_vector, top_k=10):
-        desc_idxs = [i for i, m in enumerate(self.meta) if m['field'] == 'description']
-        desc_vectors = self.vecs_norm[desc_idxs]
-        index = self.build_faiss_index(desc_vectors)
-        scores, top_ids = index.search(query_vector, top_k)
+        if self.desc_index is None:
+            return []
+
+        scores, indices = self.desc_index.search(query_vector, top_k)
+
         results = []
-        for score, idx in zip(scores[0], top_ids[0]):
-            real_idx = desc_idxs[idx]
-            m = self.meta[real_idx]
-            description = self.source_by_filename[m['filename']].get('description', '[нет description]')
-            results.append({
-                'score': float(score),
-                'id': m['id'],
-                'filename': m['filename'],
-                'description': description
-            })
-        return results
+        for score, idx in zip(scores[0], indices[0]):
+            item_id = self.desc_ids[idx]
+            item = self._get_item_by_id(item_id)
 
-    def search_combined(self, query_vector, top_k=10):
-        grouped = defaultdict(dict)
-        for i, m in enumerate(self.meta):
-            grouped[m['filename']][m['field']] = i
-
-        combined_vectors = []
-        combined_meta = []
-
-        for filename, fields in grouped.items():
-            if 'description' in fields and 'transcription' in fields:
-                i1 = fields['description']
-                i2 = fields['transcription']
-                combined = self.vecs_norm[i1] + self.vecs_norm[i2]
-                combined /= np.linalg.norm(combined)
-                combined_vectors.append(combined)
-                combined_meta.append({
-                    'filename': filename,
-                    'id': self.meta[i1]['id']
+            if item:
+                results.append({
+                    'score': float(score),
+                    'id': item['id'],
+                    'filename': item['filename'],
                 })
 
-        combined_vectors = np.vstack(combined_vectors)
-        index = self.build_faiss_index(combined_vectors)
-        scores, top_ids = index.search(query_vector, top_k)
-
-        results = []
-        for score, idx in zip(scores[0], top_ids[0]):
-            m = combined_meta[idx]
-            description = self.source_by_filename[m['filename']].get('description', '[нет description]')
-            results.append({
-                'score': float(score),
-                'id': m['id'],
-                'filename': m['filename'],
-                'description': description
-            })
         return results
 
     def search_transcription(self, query_vector, top_k=10):
-        trans_idxs = [i for i, m in enumerate(self.meta) if m['field'] == 'transcription']
-        trans_vectors = self.vecs_norm[trans_idxs]
-        index = self.build_faiss_index(trans_vectors)
-        scores, top_ids = index.search(query_vector, top_k)
+        if self.trans_index is None:
+            return []
+
+        scores, indices = self.trans_index.search(query_vector, top_k)
+
         results = []
-        for score, idx in zip(scores[0], top_ids[0]):
-            real_idx = trans_idxs[idx]
-            m = self.meta[real_idx]
-            description = self.source_by_filename[m['filename']].get('description', '[нет description]')
-            transcription = self.source_by_filename[m['filename']].get('transcription', '[нет transcription]')
-            results.append({
-                'score': float(score),
-                'id': m['id'],
-                'filename': m['filename'],
-                'description': description,
-                'transcription': transcription
-            })
+        for score, idx in zip(scores[0], indices[0]):
+            item_id = self.trans_ids[idx]
+            item = self._get_item_by_id(item_id)
+
+            if item:
+                results.append({
+                    'score': float(score),
+                    'id': item['id'],
+                    'filename': item['filename'],
+                })
+
         return results
 
     def search_combined_scores(self, query_vector, top_k=10, threshold=0.5):
@@ -135,15 +164,16 @@ class SemanticSearch:
             score_combined = score_desc + score_trans
 
             if score_combined >= threshold:
-                combined_results.append({
-                    'filename': filename,
-                    'score': score_combined,
-                    'score_description': score_desc,
-                    'score_transcription': score_trans,
-                    'description': self.source_by_filename[filename].get('description', '[Нет описания]'),
-                    'transcription': self.source_by_filename[filename].get('transcription', '[Нет транскрипции]'),
-                    'id': self.source_by_filename[filename]['id']
-                })
+                item = next((item for item in self.db_data if item['filename'] == filename), None)
+
+                if item:
+                    combined_results.append({
+                        'filename': filename,
+                        'score': score_combined,
+                        'score_description': score_desc,
+                        'score_transcription': score_trans,
+                        'id': item['id']
+                    })
 
         combined_results.sort(key=lambda x: x['score'], reverse=True)
         return combined_results[:top_k]
@@ -156,3 +186,8 @@ class SemanticSearch:
             threshold=threshold,
         )
         return [f"{self.source_url_base}{r['filename']}" for r in results]
+
+    def reload_vectors(self):
+        self.db_data = self._load_vectors_from_db()
+        self.desc_index, self.desc_ids = self._build_description_index()
+        self.trans_index, self.trans_ids = self._build_transcription_index()

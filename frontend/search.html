@@ -145,9 +145,9 @@
          async function searchWithAPI(query) {
             try {
                const response = await fetch(
-                  `http://localhost:8000/api/search?text=${encodeURIComponent(
+                  `http://localhost:8000/api/search?text=${
                      query
-                  )}`
+                  }`
                );
                return await response.json();
             } catch (error) {
