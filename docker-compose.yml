@@ -1,0 +1,16 @@
+services:
+  web:
+    build: .
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=77.239.102.166
+      - DB_NAME=app_db
+      - DB_USER=admin
+      - DB_PASSWORD=your_strong_password
+      - DB_PORT=5432
+      - SECRET_KEY=django-insecure-nh(dosnhki9uco1uimsge5e+834(1t^7&fl*f2i!5tmz(q51xx
+      - DEBUG=False
+    command: python manage.py runserver 0.0.0.0:8000
+
