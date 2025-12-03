@@ -1,3 +1,8 @@
+
+
+
+
+
 # Yappy - Semantic Video Search
 
 A Django application with semantic video search capabilities using sentence transformers and FAISS.
